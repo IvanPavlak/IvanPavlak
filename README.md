@@ -35,3 +35,14 @@
     />
   </picture>
 </p>
+
+<!-- Publication -->
+<p align="center">
+  <em>Once upon a time, I did some really cool chemistry with some even cooler people.</em>
+  <br />
+  <a href="https://pubs.acs.org/jacsat/article/146/6/3992/159102/Electronic-Structure-of-Metalloporphenes">
+    <b>Electronic Structure of Metalloporphenes, Antiaromatic Analogues of Graphene</b>
+  </a>
+  <br />
+  <sub><i>J. Am. Chem. Soc.</i> 2024, 146, 6, 3992-4001</sub>
+</p>
