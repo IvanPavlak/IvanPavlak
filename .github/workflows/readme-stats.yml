@@ -1,0 +1,147 @@
+# Renders both README stat cards inside CI every hour and force-pushes the
+# SVGs to the orphan `output` branch, so the README serves static files from
+# GitHub itself instead of fetching shared third-party instances at view time
+# (the public activity-graph instance is 402-disabled on Vercel, and
+# streak-stats.demolab.com routinely exceeds camo's ~4s image-proxy timeout).
+# Renderers are pinned by commit SHA and run only in the read-only job; the
+# write-capable job runs first-party steps exclusively. A failed render keeps
+# the previously published SVGs, so the README never shows a broken image.
+name: Generate README stats
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/readme-stats.yml"]
+
+permissions: {}
+
+concurrency:
+  group: readme-stats
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Render SVGs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Prepare output directory
+        run: mkdir -p out
+
+      # DenverCoder1/github-readme-streak-stats @ f69662e (main, 2026-08)
+      - name: Render streak card (dark)
+        uses: DenverCoder1/github-readme-streak-stats@f69662e10794e8757b12d3303a113a30b01c9bc9
+        with:
+          options: "user=IvanPavlak&theme=dark&border_radius=4.5&date_format=j%20M%5B%20Y%5D&mode=weekly&card_width=450&card_height=200&background=2E3440&stroke=1E90FF&ring=1E90FF&fire=ff4500&currStreakLabel=1E90FF&sideLabels=1E90FF&dates=1E90FF"
+          path: out/streak-dark.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render streak card (light)
+        uses: DenverCoder1/github-readme-streak-stats@f69662e10794e8757b12d3303a113a30b01c9bc9
+        with:
+          options: "user=IvanPavlak&theme=light&border_radius=4.5&date_format=j%20M%5B%20Y%5D&mode=weekly&card_width=450&card_height=200&background=ffffff&stroke=000000&ring=000000&fire=ff4500&currStreakLabel=000000&sideLabels=000000&dates=000000"
+          path: out/streak-light.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Ashutosh00710/github-readme-activity-graph @ 0962e94 (main, 2026-08)
+      - name: Check out activity-graph renderer (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: Ashutosh00710/github-readme-activity-graph
+          ref: 0962e9461de815933d462e8b98c7ce566cada8fb
+          path: renderer
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: renderer/package-lock.json
+
+      - name: Render activity graphs
+        working-directory: renderer
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+          npm run build
+          node dist/main.js &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null "http://localhost:5100/" && break
+            sleep 1
+          done
+          DARK="bg_color=2E3440&color=1E90FF&line=1E90FF&point=7cfc00&area=true&area_color=90EE90&hide_border=true&hide_title=true"
+          LIGHT="bg_color=ffffff&color=000000&line=000000&point=32cd32&area=true&area_color=32cd32&hide_border=true&hide_title=true"
+          curl -sf --max-time 120 "http://localhost:5100/graph?username=IvanPavlak&$DARK" -o ../out/activity-dark.svg
+          curl -sf --max-time 120 "http://localhost:5100/graph?username=IvanPavlak&$LIGHT" -o ../out/activity-light.svg
+          kill "$SERVER_PID"
+
+      # Both renderers return small error cards instead of failing, so gate on
+      # size: a failed render must fail the job and keep the last good SVGs.
+      - name: Validate SVGs
+        run: |
+          check() {
+            head -c 300 "$1" | grep -q "<svg" || { echo "::error::$1 is not an SVG"; exit 1; }
+            size=$(stat -c%s "$1")
+            [ "$size" -ge "$2" ] || { echo "::error::$1 is only $size bytes - looks like an error card"; exit 1; }
+            echo "$1 OK ($size bytes)"
+          }
+          check out/streak-dark.svg 4000
+          check out/streak-light.svg 4000
+          check out/activity-dark.svg 10000
+          check out/activity-light.svg 10000
+
+      - name: Upload SVGs
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats
+          path: out/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to output branch
+    runs-on: ubuntu-latest
+    needs: generate
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: stats
+          path: out
+
+      - name: Skip when nothing changed
+        id: diff
+        run: |
+          if git fetch origin output --depth 1 2>/dev/null; then
+            mkdir -p /tmp/current
+            git archive FETCH_HEAD | tar -x -C /tmp/current
+            if diff -rq /tmp/current out >/dev/null 2>&1; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "Published SVGs are identical - skipping push"
+              exit 0
+            fi
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # A fresh orphan commit each time keeps the branch at a constant size -
+      # no history accumulates from hourly refreshes.
+      - name: Force-push orphan output branch
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan output
+          cp out/*.svg .
+          git add ./*.svg
+          git commit -m "Refresh README stat cards"
+          git push --force origin output
