@@ -59,7 +59,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
           cache-dependency-path: renderer/package-lock.json
 
@@ -68,7 +68,10 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm ci
+          # npm install, not npm ci: the pinned upstream lockfile is missing the
+          # cross-platform optional-dependency entries (@unrs/resolver-binding-*),
+          # which npm 11+ rejects with a package.json/lockfile sync error.
+          npm install --no-audit --no-fund
           npm run build
           node dist/main.js &
           SERVER_PID=$!
