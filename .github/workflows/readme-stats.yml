@@ -50,16 +50,16 @@ jobs:
 
       # Ashutosh00710/github-readme-activity-graph @ 0962e94 (main, 2026-08)
       - name: Check out activity-graph renderer (pinned)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: Ashutosh00710/github-readme-activity-graph
           ref: 0962e9461de815933d462e8b98c7ce566cada8fb
           path: renderer
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: renderer/package-lock.json
 
@@ -76,8 +76,9 @@ jobs:
             curl -sf -o /dev/null "http://localhost:5100/" && break
             sleep 1
           done
-          DARK="bg_color=2E3440&color=1E90FF&line=1E90FF&point=7cfc00&area=true&area_color=90EE90&hide_border=true&hide_title=true"
-          LIGHT="bg_color=ffffff&color=000000&line=000000&point=32cd32&area=true&area_color=32cd32&hide_border=true&hide_title=true"
+          # border_color/radius mirror the streak card's border (#E4E2E2, rx 4.5)
+          DARK="bg_color=2E3440&color=1E90FF&line=1E90FF&point=7cfc00&area=true&area_color=90EE90&border_color=E4E2E2&radius=4.5&hide_title=true"
+          LIGHT="bg_color=ffffff&color=000000&line=000000&point=32cd32&area=true&area_color=32cd32&border_color=E4E2E2&radius=4.5&hide_title=true"
           curl -sf --max-time 120 "http://localhost:5100/graph?username=IvanPavlak&$DARK" -o ../out/activity-dark.svg
           curl -sf --max-time 120 "http://localhost:5100/graph?username=IvanPavlak&$LIGHT" -o ../out/activity-light.svg
           kill "$SERVER_PID"
@@ -98,7 +99,7 @@ jobs:
           check out/activity-light.svg 10000
 
       - name: Upload SVGs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stats
           path: out/
@@ -112,9 +113,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: stats
           path: out
