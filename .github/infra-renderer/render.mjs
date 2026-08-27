@@ -251,8 +251,23 @@ const elements = (scene.elements ?? [])
 if (elements.length === 0) throw new Error("Drawing contains no elements");
 
 // ---------------------------------------------------------------------------
-// Render both themes
+// Render, then express both themes as CSS
 // ---------------------------------------------------------------------------
+//
+// Excalidraw's dark mode is purely an invert filter over otherwise identical
+// geometry, so ONE render serves both themes: the filters are lifted off the
+// elements and re-applied from a stylesheet instead.
+//
+// The two published files differ only in that stylesheet:
+//   light - unconditionally light; the README's <picture> hands it out only
+//           to light-scheme browsers.
+//   dark  - dark by default, with a `prefers-color-scheme: light` override.
+//           <picture> gives it only to dark-scheme browsers, where the
+//           override cannot match, so the card renders dark as before. The
+//           override exists for the README's click-through link: navigating
+//           to this file directly then follows the reader's own theme.
+//           Browsers that ignore media queries inside an <img>-loaded SVG
+//           (Safari, as of WebKit bug 199134) simply keep the dark default.
 
 const { exportToSvg } = await import("@excalidraw/excalidraw");
 
@@ -269,33 +284,51 @@ const CARD = {
   displayWidth: 832,
 };
 
-// Draw the background and border ourselves, card-style. The border and
-// background live OUTSIDE the dark-mode invert filter so they keep the exact
-// card colors instead of being color-inverted with the drawing.
-function styleAsCard(svg, dark) {
+const NS = "http://www.w3.org/2000/svg";
+const IMAGE_USE_SELECTOR = 'use[href^="#image-"]';
+
+// Render dark (so Excalidraw itself supplies the dark filter values rather
+// than this script hardcoding them), then lift those filters into CSS: the
+// drawing is wrapped in .infra-content, and the card background and border
+// stay outside it so they never get color-inverted with the drawing.
+function buildCard(svg) {
   const doc = svg.ownerDocument;
-  const NS = "http://www.w3.org/2000/svg";
   const [, , width, height] = svg.getAttribute("viewBox").split(/\s+/).map(Number);
   const scale = width / CARD.displayWidth;
   const radius = CARD.radiusPx * scale;
 
-  const themeFilter = svg.getAttribute("filter");
-  if (themeFilter) {
-    const g = doc.createElementNS(NS, "g");
-    g.setAttribute("filter", themeFilter);
-    while (svg.firstChild) g.appendChild(svg.firstChild);
-    svg.removeAttribute("filter");
-    svg.appendChild(g);
+  const contentFilter = svg.getAttribute("filter");
+  if (!contentFilter) throw new Error("dark render produced no invert filter - upstream behavior changed");
+  svg.removeAttribute("filter");
+
+  const imageUses = [...svg.querySelectorAll(IMAGE_USE_SELECTOR)];
+  const imageFilter = imageUses[0]?.getAttribute("filter") ?? null;
+  for (const el of imageUses) el.removeAttribute("filter");
+
+  // Every filter must be one this script knows how to re-apply from CSS;
+  // anything else would silently lose its dark-mode treatment.
+  const stray = [...svg.querySelectorAll("[filter]")];
+  if (stray.length) {
+    throw new Error(`unexpected filter on <${stray[0].tagName}> - cannot express theme in CSS`);
   }
 
+  const content = doc.createElementNS(NS, "g");
+  content.setAttribute("class", "infra-content");
+  while (svg.firstChild) content.appendChild(svg.firstChild);
+
+  const style = doc.createElementNS(NS, "style");
+  svg.appendChild(style);
+
   const bg = doc.createElementNS(NS, "rect");
+  bg.setAttribute("class", "infra-bg");
   bg.setAttribute("x", "0");
   bg.setAttribute("y", "0");
   bg.setAttribute("width", String(width));
   bg.setAttribute("height", String(height));
   bg.setAttribute("rx", String(radius));
-  bg.setAttribute("fill", dark ? CARD.darkBg : CARD.lightBg);
-  svg.insertBefore(bg, svg.firstChild);
+  svg.appendChild(bg);
+
+  svg.appendChild(content);
 
   const inset = 0.5 * scale; // keep the on-screen half-pixel of stroke inside the viewBox
   const border = doc.createElementNS(NS, "rect");
@@ -311,22 +344,36 @@ function styleAsCard(svg, dark) {
   // matching the streak/activity cards
   border.setAttribute("vector-effect", "non-scaling-stroke");
   svg.appendChild(border);
+
+  return { style, contentFilter, imageFilter };
 }
 
-async function render(dark) {
-  const svg = await exportToSvg({
-    elements,
-    files,
-    appState: {
-      exportBackground: false,
-      exportWithDarkMode: dark,
-      exportEmbedScene: false,
-      exportScale: 1,
-    },
-    exportPadding: 128,
-  });
-  styleAsCard(svg, dark);
-  const raw = new dom.window.XMLSerializer().serializeToString(svg);
+function themeCss(theme, contentFilter, imageFilter) {
+  const light = [`.infra-bg{fill:${CARD.lightBg}}`, `.infra-content{filter:none}`];
+  const dark = [`.infra-bg{fill:${CARD.darkBg}}`, `.infra-content{filter:${contentFilter}}`];
+  if (imageFilter) {
+    light.push(`.infra-content ${IMAGE_USE_SELECTOR}{filter:none}`);
+    dark.push(`.infra-content ${IMAGE_USE_SELECTOR}{filter:${imageFilter}}`);
+  }
+  if (theme === "light") return light.join("");
+  return `${dark.join("")}@media(prefers-color-scheme:light){${light.join("")}}`;
+}
+
+const svgRoot = await exportToSvg({
+  elements,
+  files,
+  appState: {
+    exportBackground: false,
+    exportWithDarkMode: true,
+    exportEmbedScene: false,
+    exportScale: 1,
+  },
+  exportPadding: 128,
+});
+const { style, contentFilter, imageFilter } = buildCard(svgRoot);
+
+function serialize() {
+  const raw = new dom.window.XMLSerializer().serializeToString(svgRoot);
   // The exporter sets xmlns itself and the serializer re-declares it, which
   // produces a duplicate attribute - invalid XML that browsers refuse when
   // the SVG is loaded through <img>. Keep the first of each root attribute.
@@ -339,9 +386,12 @@ async function render(dark) {
   });
 }
 
+// Both files come from the same DOM with only the stylesheet swapped, which
+// guarantees their geometry is identical.
 await mkdir(outDir, { recursive: true });
 for (const theme of ["light", "dark"]) {
-  const svg = await render(theme === "dark");
+  style.textContent = themeCss(theme, contentFilter, imageFilter);
+  const svg = serialize();
   validate(svg, theme);
   const outPath = path.join(outDir, `infrastructure-${theme}.svg`);
   await writeFile(outPath, svg, "utf8");
@@ -358,6 +408,13 @@ function validate(svg, theme) {
   if (svg.includes("[[")) fail("contains a wiki-link");
   if (!svg.includes("@font-face")) fail("no embedded fonts");
   if (!svg.includes(CARD.borderColor)) fail("card border missing");
+  if (!svg.includes(".infra-bg{fill:")) fail("theme stylesheet missing");
+  if (theme === "dark" && !svg.includes("prefers-color-scheme:light")) {
+    fail("dark file lacks the light-theme override the click-through relies on");
+  }
+  if (theme === "light" && svg.includes("prefers-color-scheme")) {
+    fail("light file must be unconditionally light");
+  }
   if (/url\(\s*["']?https?:/i.test(svg)) fail("font/style references an external URL");
   if (/href=["']https?:/i.test(svg)) fail("references an external resource");
   if (Object.keys(files).length > 0 && !svg.includes("data:image/")) fail("embedded image missing");

@@ -14,19 +14,46 @@
 <!-- Homelab Infrastructure -->
 <!-- Rendered from a private Excalidraw source by .github/infra-renderer,
      published to the orphan `diagrams` branch by CI in the source repo. -->
+<h3 align="center">Infrastructure</h3>
+<p align="center">
+  <em>Proudly spending my hard-earned money and free time self-hosting infrastructure I don't technically need, purely for the thrill of it</em>
+</p>
+<p align="center">
+  <a
+    href="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-dark.svg"
+    title="Open the full-size diagram"
+  >
+    <picture>
+      <source
+        srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-dark.svg"
+        media="(prefers-color-scheme: dark)"
+      />
+      <source
+        srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-light.svg"
+        media="(prefers-color-scheme: light)"
+      />
+      <img
+        alt="Homelab Infrastructure"
+        src="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-dark.svg"
+      />
+    </picture>
+  </a>
+</p>
+
+<!-- Activity Graph -->
 <p align="center">
   <picture>
     <source
-      srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-dark.svg"
+      srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/activity-dark.svg"
       media="(prefers-color-scheme: dark)"
     />
     <source
-      srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-light.svg"
+      srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/activity-light.svg"
       media="(prefers-color-scheme: light)"
     />
     <img
-      alt="Homelab Infrastructure"
-      src="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-dark.svg"
+      alt="GitHub Activity Graph"
+      src="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/activity-dark.svg"
     />
   </picture>
 </p>
@@ -45,24 +72,6 @@
     <img
       alt="GitHub Streak Stats"
       src="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/streak-dark.svg"
-    />
-  </picture>
-</p>
-
-<!-- Activity Graph -->
-<p align="center">
-  <picture>
-    <source
-      srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/activity-dark.svg"
-      media="(prefers-color-scheme: dark)"
-    />
-    <source
-      srcset="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/activity-light.svg"
-      media="(prefers-color-scheme: light)"
-    />
-    <img
-      alt="GitHub Activity Graph"
-      src="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/output/activity-dark.svg"
     />
   </picture>
 </p>
