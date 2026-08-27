@@ -20,7 +20,7 @@
 </p>
 <p align="center">
   <a
-    href="https://raw.githubusercontent.com/IvanPavlak/IvanPavlak/diagrams/infrastructure-dark.svg"
+    href="https://ivanpavlak.github.io/IvanPavlak/infrastructure-dark.svg"
     title="Open the full-size diagram"
   >
     <picture>
