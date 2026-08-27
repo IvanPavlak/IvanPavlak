@@ -1,0 +1,16 @@
+{
+  "name": "infra-renderer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Renders the homelab Excalidraw diagram to self-contained light/dark SVGs for the profile README",
+  "type": "module",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "canvas": "3.2.3",
+    "jsdom": "26.1.0",
+    "lz-string": "1.5.0"
+  }
+}

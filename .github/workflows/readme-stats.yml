@@ -79,12 +79,40 @@ jobs:
             curl -sf -o /dev/null "http://localhost:5100/" && break
             sleep 1
           done
-          # border_color/radius mirror the streak card's border (#E4E2E2, rx 4.5)
+          # border_color mirrors the streak card's border (#E4E2E2); the border
+          # geometry itself is aligned by the "Normalize card borders" step
           DARK="bg_color=2E3440&color=1E90FF&line=1E90FF&point=7cfc00&area=true&area_color=90EE90&border_color=E4E2E2&radius=4.5&hide_title=true"
           LIGHT="bg_color=ffffff&color=000000&line=000000&point=32cd32&area=true&area_color=32cd32&border_color=E4E2E2&radius=4.5&hide_title=true"
           curl -sf --max-time 120 "http://localhost:5100/graph?username=IvanPavlak&$DARK" -o ../out/activity-dark.svg
           curl -sf --max-time 120 "http://localhost:5100/graph?username=IvanPavlak&$LIGHT" -o ../out/activity-light.svg
           kill "$SERVER_PID"
+
+      # All three README cards (streak, activity, infrastructure diagram) must
+      # show identical borders. The upstream renderers draw 1-user-unit strokes,
+      # which visually thin out when a card is scaled down to the README column
+      # (the 1200px-wide activity graph renders ~0.7px vs the streak's true 1px
+      # at its native 450px). non-scaling-stroke pins every border to exactly
+      # 1 screen pixel at any scale, and the activity card's inset/radius are
+      # aligned to display at the streak's proportions (0.5px inset, ~4.5px rx).
+      - name: Normalize card borders
+        run: |
+          sed -i "s|<rect stroke='#E4E2E2' |<rect vector-effect='non-scaling-stroke' stroke='#E4E2E2' |" \
+            out/streak-dark.svg out/streak-light.svg
+          sed -i \
+            -e 's|id="cardBg"|id="cardBg" vector-effect="non-scaling-stroke"|' \
+            -e 's|x="0" y="0" rx="4.5" height="100%"|x="0.75" y="0.75" rx="6.5" height="418.5"|' \
+            -e 's|width="100%" \(fill="#[0-9A-Fa-f]*" stroke-opacity\)|width="1198.5" \1|' \
+            out/activity-dark.svg out/activity-light.svg
+          # sed exits 0 even when upstream markup drifted and nothing matched -
+          # verify every edit actually landed
+          for f in out/streak-dark.svg out/streak-light.svg; do
+            grep -q "vector-effect='non-scaling-stroke' stroke='#E4E2E2'" "$f" \
+              || { echo "::error::$f: border normalization did not apply"; exit 1; }
+          done
+          for f in out/activity-dark.svg out/activity-light.svg; do
+            { grep -q 'id="cardBg" vector-effect="non-scaling-stroke"' "$f" && grep -q 'width="1198.5"' "$f"; } \
+              || { echo "::error::$f: border normalization did not apply"; exit 1; }
+          done
 
       # Both renderers return small error cards instead of failing, so gate on
       # size: a failed render must fail the job and keep the last good SVGs.
